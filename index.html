@@ -6,32 +6,91 @@
 <title>Islanda — Ring Road Sud 2025</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <style>
-  :root { --ice:#e8f4f8; --deep:#1a2a3a; --gold:#c9a84c; --attr:#4a9bbe; }
+  :root { --ice:#e8f4f8; --deep:#1a2a3a; --gold:#c9a84c; --attr:#4a9bbe; --panel:#162330; }
   * { margin:0; padding:0; box-sizing:border-box; }
   body { font-family:-apple-system,'Helvetica Neue',sans-serif; background:var(--deep); color:var(--ice); height:100vh; display:flex; flex-direction:column; overflow:hidden; }
-  header { padding:10px 14px 8px; background:var(--deep); border-bottom:1px solid rgba(200,180,120,0.2); display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
+
+  header { padding:10px 14px 8px; background:var(--deep); border-bottom:1px solid rgba(200,180,120,0.2); display:flex; align-items:center; justify-content:space-between; flex-shrink:0; z-index:1001; }
   .header-left h1 { font-size:16px; font-weight:700; color:var(--gold); }
   .header-left p { font-size:10px; color:rgba(232,244,248,0.5); margin-top:1px; }
-  .legend { display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content:flex-end; max-width:200px; }
-  .legend-item { display:flex; align-items:center; gap:4px; font-size:9px; color:rgba(232,244,248,0.6); }
-  .legend-line { width:16px; height:3px; border-radius:2px; flex-shrink:0; }
-  .legend-dot { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+  .header-right { display:flex; align-items:center; gap:10px; }
+  .toggle-panel-btn { background:rgba(201,168,76,0.15); border:1px solid rgba(201,168,76,0.4); border-radius:8px; color:var(--gold); font-size:11px; font-weight:600; padding:5px 10px; cursor:pointer; white-space:nowrap; }
+
+  /* Main area */
+  .main { flex:1; display:flex; overflow:hidden; position:relative; }
   #map { flex:1; }
-  .leaflet-popup-content-wrapper { background:#1a2a3a !important; border:1px solid rgba(201,168,76,0.4) !important; border-radius:12px !important; box-shadow:0 8px 32px rgba(0,0,0,0.6) !important; padding:0 !important; max-width:280px !important; min-width:220px !important; }
+
+  /* Sidebar */
+  #sidebar {
+    width:260px;
+    background:var(--panel);
+    border-left:1px solid rgba(201,168,76,0.15);
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+    flex-shrink:0;
+    transition:width 0.3s ease;
+    z-index:1000;
+  }
+  #sidebar.hidden { width:0; }
+
+  /* Day selector tabs */
+  .day-tabs { display:flex; flex-wrap:wrap; gap:4px; padding:10px; border-bottom:1px solid rgba(255,255,255,0.06); flex-shrink:0; }
+  .day-tab {
+    padding:4px 8px; border-radius:6px; font-size:10px; font-weight:600;
+    cursor:pointer; border:1.5px solid transparent; color:rgba(232,244,248,0.5);
+    white-space:nowrap; transition:all 0.2s;
+  }
+  .day-tab.active { color:#1a2a3a; font-weight:700; }
+
+  /* Stop list */
+  .stop-list { flex:1; overflow-y:auto; padding:8px; }
+  .stop-list::-webkit-scrollbar { width:3px; }
+  .stop-list::-webkit-scrollbar-track { background:transparent; }
+  .stop-list::-webkit-scrollbar-thumb { background:rgba(201,168,76,0.3); border-radius:2px; }
+
+  .stop-item {
+    padding:10px; border-radius:10px; margin-bottom:6px;
+    background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.06);
+    cursor:pointer; transition:all 0.2s;
+  }
+  .stop-item:hover { background:rgba(255,255,255,0.08); border-color:rgba(201,168,76,0.3); }
+  .stop-item-header { display:flex; align-items:center; gap:6px; margin-bottom:4px; }
+  .stop-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+  .stop-name { font-size:12px; font-weight:600; color:#e8f4f8; flex:1; }
+  .stop-type-badge { font-size:8px; font-weight:600; letter-spacing:0.8px; text-transform:uppercase; padding:1px 5px; border-radius:4px; }
+  .stop-type-badge.hotel { background:rgba(201,168,76,0.2); color:var(--gold); }
+  .stop-type-badge.attr { background:rgba(74,155,190,0.2); color:var(--attr); }
+  .stop-type-badge.airport { background:rgba(122,179,204,0.2); color:#7ab3cc; }
+  .stop-time { font-size:10px; color:rgba(232,244,248,0.5); margin-bottom:3px; }
+  .stop-km { font-size:10px; color:rgba(201,168,76,0.7); }
+  .stop-desc { font-size:10px; color:rgba(232,244,248,0.4); line-height:1.4; margin-top:4px; }
+
+  /* Connector line between stops */
+  .stop-connector { width:1px; height:8px; background:rgba(255,255,255,0.08); margin:0 0 6px 14px; }
+
+  /* Day summary footer */
+  .day-summary { padding:10px; border-top:1px solid rgba(255,255,255,0.06); flex-shrink:0; }
+  .day-summary-text { font-size:10px; color:rgba(232,244,248,0.4); line-height:1.5; }
+  .day-summary-text strong { color:var(--gold); }
+
+  /* Popup */
+  .leaflet-popup-content-wrapper { background:#1a2a3a !important; border:1px solid rgba(201,168,76,0.4) !important; border-radius:12px !important; box-shadow:0 8px 32px rgba(0,0,0,0.6) !important; padding:0 !important; max-width:260px !important; min-width:200px !important; }
   .leaflet-popup-tip { background:#1a2a3a !important; }
   .leaflet-popup-content { margin:0 !important; width:auto !important; }
-  .popup-inner { padding:14px 16px; }
-  .popup-type { font-size:9px; font-weight:600; letter-spacing:1.5px; text-transform:uppercase; margin-bottom:4px; }
+  .popup-inner { padding:12px 14px; }
+  .popup-type { font-size:9px; font-weight:600; letter-spacing:1.5px; text-transform:uppercase; margin-bottom:3px; }
   .popup-type.hotel { color:var(--gold); }
   .popup-type.attraction { color:var(--attr); }
-  .popup-name { font-size:17px; font-weight:700; color:#e8f4f8; line-height:1.2; margin-bottom:8px; }
-  .popup-divider { height:1px; background:rgba(201,168,76,0.15); margin:8px 0; }
-  .popup-meta { display:flex; flex-direction:column; gap:4px; margin-bottom:10px; }
-  .popup-row { display:flex; align-items:center; gap:6px; font-size:11px; color:rgba(232,244,248,0.7); }
+  .popup-name { font-size:15px; font-weight:700; color:#e8f4f8; line-height:1.2; margin-bottom:6px; }
+  .popup-divider { height:1px; background:rgba(201,168,76,0.15); margin:6px 0; }
+  .popup-meta { display:flex; flex-direction:column; gap:3px; margin-bottom:8px; }
+  .popup-row { display:flex; align-items:center; gap:6px; font-size:10px; color:rgba(232,244,248,0.7); }
   .popup-row strong { color:#e8f4f8; font-weight:600; }
-  .popup-desc { font-size:11px; color:rgba(232,244,248,0.55); line-height:1.5; margin-bottom:10px; }
-  .popup-btn { display:block; width:100%; padding:9px 12px; background:rgba(201,168,76,0.1); border:1px solid rgba(201,168,76,0.4); border-radius:8px; color:var(--gold); font-size:11px; font-weight:500; text-align:center; text-decoration:none; font-family:-apple-system,sans-serif; }
+  .popup-desc { font-size:10px; color:rgba(232,244,248,0.55); line-height:1.4; margin-bottom:8px; }
+  .popup-btn { display:block; width:100%; padding:8px 10px; background:rgba(201,168,76,0.1); border:1px solid rgba(201,168,76,0.4); border-radius:8px; color:var(--gold); font-size:10px; font-weight:500; text-align:center; text-decoration:none; font-family:-apple-system,sans-serif; }
   .popup-btn.no-link { color:rgba(232,244,248,0.25); border-color:rgba(232,244,248,0.08); background:rgba(255,255,255,0.02); }
+
   #seg-info { position:absolute; bottom:20px; left:50%; transform:translateX(-50%); z-index:999; background:rgba(26,42,58,0.95); border:1px solid rgba(201,168,76,0.3); border-radius:20px; padding:7px 16px; font-size:11px; color:rgba(232,244,248,0.8); white-space:nowrap; pointer-events:none; opacity:0; transition:opacity 0.3s; }
   #seg-info.visible { opacity:1; }
   #seg-info strong { color:var(--gold); }
@@ -43,143 +102,145 @@
     <h1>Islanda — Ring Road Sud</h1>
     <p>14 – 20 agosto 2025 &nbsp;·&nbsp; ~1.400 km</p>
   </div>
-  <div class="legend">
-    <div class="legend-item"><div class="legend-line" style="background:#7ab3cc"></div><span>14 ago</span></div>
-    <div class="legend-item"><div class="legend-line" style="background:#5ec26a"></div><span>15 ago</span></div>
-    <div class="legend-item"><div class="legend-line" style="background:#e8a838"></div><span>16 ago</span></div>
-    <div class="legend-item"><div class="legend-line" style="background:#e05c5c"></div><span>17 ago</span></div>
-    <div class="legend-item"><div class="legend-line" style="background:#a66de8"></div><span>18 ago</span></div>
-    <div class="legend-item"><div class="legend-line" style="background:#4ac4c4"></div><span>19 ago</span></div>
-    <div class="legend-item"><div class="legend-dot" style="background:var(--gold)"></div><span>Hotel</span></div>
-    <div class="legend-item"><div class="legend-dot" style="background:var(--attr)"></div><span>Attrazione</span></div>
+  <div class="header-right">
+    <button class="toggle-panel-btn" onclick="toggleSidebar()">☰ Tappe</button>
   </div>
 </header>
-<div id="map"></div>
+<div class="main">
+  <div id="map"></div>
+  <div id="sidebar">
+    <div class="day-tabs" id="dayTabs"></div>
+    <div class="stop-list" id="stopList"></div>
+    <div class="day-summary" id="daySummary"></div>
+  </div>
+</div>
 <div id="seg-info"></div>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-var map = L.map('map', { center:[64.5,-18.5], zoom:7, zoomControl:true, attributionControl:false });
+var map = L.map('map', { center:[64.5,-19.5], zoom:7, zoomControl:true, attributionControl:false });
 L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom:19, subdomains:'abcd' }).addTo(map);
 
 var days = [
   {
-    color: '#7ab3cc', label: '14 ago',
-    stops: [
-      { name:'Keflavík Airport', lat:63.985, lng:-22.605, type:'airport', day:'14 ago', time:'Arrivo', desc:'Atterraggio e ritiro auto. Partenza verso Borgarnes.', km:null, bookingUrl:null, nights:null },
-      { name:'Borgarnes', lat:64.538, lng:-21.921, type:'hotel', day:'14–16 ago', time:'Arrivo ~16:00 · 2 notti', desc:'Base per Snæfellsnes. 75 km da Keflavík. · 💶 €1.405 (2 notti)', km:'75 km · ~1h 15min', bookingUrl:'https://www.booking.com/Share-TB4fp9n', nights:'1/2' }
+    color:'#7ab3cc', label:'14 ago', fullLabel:'14 agosto',
+    summary:'Arrivo a Keflavík e trasferimento a Borgarnes. Giornata di viaggio.',
+    totalKm:'75 km', totalTime:'~1h 30min guida',
+    stops:[
+      { name:'Keflavík Airport', lat:63.985, lng:-22.605, type:'airport', time:'Arrivo', desc:'Atterraggio, ritiro auto, partenza verso Borgarnes.', km:null, bookingUrl:null, nights:null },
+      { name:'Borgarnes', lat:64.538, lng:-21.921, type:'hotel', time:'~16:00 · Notte 1/2', desc:'Base per Snæfellsnes. 75 km da KEF. · 💶 €1.405 (2 notti)', km:'75 km · ~1h 15min', bookingUrl:'https://www.booking.com/Share-TB4fp9n', nights:'1/2' }
     ],
-    segments: [{ km:'75 km', time:'~1h 15min' }]
+    segments:[{ km:'75 km', time:'~1h 15min' }]
   },
   {
-    color: '#5ec26a', label: '15 ago',
-    stops: [
-      { name:'Borgarnes', lat:64.538, lng:-21.921, type:'hotel', day:'14–16 ago', time:'Partenza mattina', desc:'Base per Snæfellsnes. · 💶 €1.405 (2 notti)', km:null, bookingUrl:'https://www.booking.com/Share-TB4fp9n', nights:null },
-      { name:'Kirkjufell', lat:64.941, lng:-23.306, type:'attr', day:'15 ago', time:'Mattina', desc:'La montagna iconica di Game of Thrones con cascata Kirkjufellsfoss.' },
-      { name:'Arnarstapi', lat:64.769, lng:-23.622, type:'attr', day:'15 ago', time:'Metà mattina', desc:'Scogliere laviche, grotte marine e archi di roccia.' },
-      { name:'Snæfellsjökull', lat:64.808, lng:-23.776, type:'attr', day:'15 ago', time:'Pomeriggio', desc:'Il vulcano-ghiacciaio di Jules Verne. Parco Nazionale.' },
-      { name:'Djúpalónssandur', lat:64.747, lng:-23.898, type:'attr', day:'15 ago', time:'Tramonto', desc:'Spiaggia di ciottoli neri con pietre da sollevamento dei pescatori.' },
-      { name:'Borgarnes', lat:64.538, lng:-21.921, type:'hotel', day:'Rientro sera', time:'Rientro ~21:00', desc:'Rientro a Borgarnes. · 💶 €1.405 (2 notti)', km:null, bookingUrl:'https://www.booking.com/Share-TB4fp9n', nights:null }
+    color:'#5ec26a', label:'15 ago', fullLabel:'15 agosto',
+    summary:'Giornata intera nella penisola di Snæfellsnes. Rientro a Borgarnes la sera.',
+    totalKm:'~270 km', totalTime:'~3h 30min guida',
+    stops:[
+      { name:'Borgarnes', lat:64.538, lng:-21.921, type:'hotel', time:'Partenza mattina', desc:'Base per Snæfellsnes.', km:null, bookingUrl:'https://www.booking.com/Share-TB4fp9n', nights:null },
+      { name:'Kirkjufell', lat:64.941, lng:-23.306, type:'attr', time:'Mattina', desc:'Montagna iconica di Game of Thrones con cascata Kirkjufellsfoss.', km:'~90 km · ~1h 20min', bookingUrl:null, nights:null },
+      { name:'Arnarstapi', lat:64.769, lng:-23.622, type:'attr', time:'Metà mattina', desc:'Scogliere laviche, grotte marine e archi di roccia.', km:'~25 km · ~25min', bookingUrl:null, nights:null },
+      { name:'Snæfellsjökull', lat:64.808, lng:-23.776, type:'attr', time:'Pomeriggio', desc:'Il vulcano-ghiacciaio di Jules Verne. Parco Nazionale.', km:'~15 km · ~15min', bookingUrl:null, nights:null },
+      { name:'Djúpalónssandur', lat:64.747, lng:-23.898, type:'attr', time:'Tramonto', desc:'Spiaggia di ciottoli neri con pietre da sollevamento dei pescatori.', km:'~10 km · ~10min', bookingUrl:null, nights:null },
+      { name:'Borgarnes', lat:64.538, lng:-21.921, type:'hotel', time:'Rientro ~21:00 · Notte 2', desc:'Rientro a Borgarnes.', km:'~130 km · ~1h 45min', bookingUrl:'https://www.booking.com/Share-TB4fp9n', nights:null }
     ],
-    segments: [
-      { km:'~90 km', time:'~1h 20min' },
-      { km:'~25 km', time:'~25min' },
-      { km:'~15 km', time:'~15min' },
-      { km:'~10 km', time:'~10min' },
+    segments:[
+      { km:'~90 km', time:'~1h 20min' },{ km:'~25 km', time:'~25min' },
+      { km:'~15 km', time:'~15min' },{ km:'~10 km', time:'~10min' },
       { km:'~130 km', time:'~1h 45min' }
     ]
   },
   {
-    color: '#e8a838', label: '16 ago',
-    stops: [
-      { name:'Borgarnes', lat:64.538, lng:-21.921, type:'hotel', day:'16 ago', time:'Partenza mattina', desc:'Partenza verso sud.', km:null, bookingUrl:'https://www.booking.com/Share-TB4fp9n', nights:null },
-      { name:'Gullfoss', lat:64.327, lng:-20.121, type:'attr', day:'16 ago', time:'Mattina', desc:'La cascata d\'oro. Una delle più potenti d\'Islanda, su due livelli.' },
-      { name:'Geysir / Strokkur', lat:64.313, lng:-20.302, type:'attr', day:'16 ago', time:'Mattina', desc:'Geyser che erutta ogni 5-8 minuti fino a 30 metri.' },
-      { name:'Seljalandsfoss', lat:63.616, lng:-19.988, type:'attr', day:'16 ago', time:'Pomeriggio', desc:'Cascata che si può girare dall\'interno camminando dietro il velo d\'acqua.' },
-      { name:'Skógafoss', lat:63.532, lng:-19.511, type:'attr', day:'16 ago', time:'Tardo pomeriggio', desc:'Cascata enorme, 60m. 500 scalini per il panorama dall\'alto.' },
-      { name:'Vík í Mýrdal', lat:63.419, lng:-19.005, type:'hotel', day:'16–17 ago', time:'Arrivo ~19:00 · 1 notte', desc:'Tappa sulla costa sud. · 💶 €703 (1 notte)', km:'~300 km · ~4h', bookingUrl:'https://www.booking.com/Share-1qDEiK', nights:'3' }
+    color:'#e8a838', label:'16 ago', fullLabel:'16 agosto',
+    summary:'Borgarnes → Vík via Golden Circle e cascate. Giornata intensa.',
+    totalKm:'~300 km', totalTime:'~4h guida',
+    stops:[
+      { name:'Borgarnes', lat:64.538, lng:-21.921, type:'hotel', time:'Partenza mattina', desc:'Partenza verso sud.', km:null, bookingUrl:'https://www.booking.com/Share-TB4fp9n', nights:null },
+      { name:'Gullfoss', lat:64.327, lng:-20.121, type:'attr', time:'Mattina', desc:'La cascata d\'oro su due livelli. Golden Circle.', km:'~160 km · ~2h', bookingUrl:null, nights:null },
+      { name:'Geysir / Strokkur', lat:64.313, lng:-20.302, type:'attr', time:'Mattina', desc:'Geyser che erutta ogni 5-8 minuti fino a 30 metri.', km:'~8 km · ~10min', bookingUrl:null, nights:null },
+      { name:'Seljalandsfoss', lat:63.616, lng:-19.988, type:'attr', time:'Pomeriggio', desc:'Cascata che si può girare dall\'interno.', km:'~75 km · ~1h', bookingUrl:null, nights:null },
+      { name:'Skógafoss', lat:63.532, lng:-19.511, type:'attr', time:'Tardo pomeriggio', desc:'Cascata 60m. 500 scalini per il panorama dall\'alto.', km:'~20 km · ~20min', bookingUrl:null, nights:null },
+      { name:'Vík í Mýrdal', lat:63.419, lng:-19.005, type:'hotel', time:'~19:00 · Notte 3', desc:'Tappa sulla costa sud. · 💶 €703 (1 notte)', km:'~30 km · ~30min', bookingUrl:'https://www.booking.com/Share-1qDEiK', nights:'3' }
     ],
-    segments: [
-      { km:'~160 km', time:'~2h' },
-      { km:'~8 km', time:'~10min' },
-      { km:'~75 km', time:'~1h' },
-      { km:'~20 km', time:'~20min' },
+    segments:[
+      { km:'~160 km', time:'~2h' },{ km:'~8 km', time:'~10min' },
+      { km:'~75 km', time:'~1h' },{ km:'~20 km', time:'~20min' },
       { km:'~30 km', time:'~30min' }
     ]
   },
   {
-    color: '#e05c5c', label: '17 ago',
-    stops: [
-      { name:'Vík í Mýrdal', lat:63.419, lng:-19.005, type:'hotel', day:'17 ago', time:'Partenza mattina', desc:'Partenza verso est. · 💶 €703 (1 notte)', km:null, bookingUrl:'https://www.booking.com/Share-1qDEiK', nights:null },
-      { name:'Reynisfjara', lat:63.403, lng:-19.044, type:'attr', day:'17 ago', time:'Mattina', desc:'Spiaggia di sabbia nera con colonne basaltiche. Attenzione alle onde.' },
-      { name:'Fjaðrárgljúfur', lat:63.774, lng:-18.173, type:'attr', day:'17 ago', time:'Metà mattina', desc:'Canyon lungo e stretto, uno dei più fotogenici d\'Islanda.' },
-      { name:'Skaftafell / Svartifoss', lat:64.016, lng:-16.975, type:'attr', day:'17 ago', time:'Pomeriggio', desc:'Cascata con colonne basaltiche nere esagonali. Trekking 5 km A/R.' },
-      { name:'Diamond Beach', lat:64.044, lng:-16.178, type:'attr', day:'17 ago', time:'Sera', desc:'Blocchi di ghiaccio turchese sulla sabbia nera.' },
-      { name:'Jökulsárlón', lat:64.078, lng:-16.179, type:'hotel', day:'17–18 ago', time:'Arrivo ~17:00 · 1 notte', desc:'Laguna glaciale. Tappa più a est del viaggio. · 💶 €710 (1 notte)', km:'~250 km · ~3h', bookingUrl:'https://www.booking.com/Share-l9ZJNM', nights:'4' }
+    color:'#e05c5c', label:'17 ago', fullLabel:'17 agosto',
+    summary:'Vík → Jökulsárlón via spiaggia nera, canyon e ghiacciaio.',
+    totalKm:'~250 km', totalTime:'~3h guida',
+    stops:[
+      { name:'Vík í Mýrdal', lat:63.419, lng:-19.005, type:'hotel', time:'Partenza mattina', desc:'Partenza verso est.', km:null, bookingUrl:'https://www.booking.com/Share-1qDEiK', nights:null },
+      { name:'Reynisfjara', lat:63.403, lng:-19.044, type:'attr', time:'Mattina', desc:'Spiaggia sabbia nera con colonne basaltiche. Attenzione onde!', km:'~5 km · ~5min', bookingUrl:null, nights:null },
+      { name:'Fjaðrárgljúfur', lat:63.774, lng:-18.173, type:'attr', time:'Metà mattina', desc:'Canyon stretto e fotogenico. Deviazione breve dalla Route 1.', km:'~85 km · ~1h', bookingUrl:null, nights:null },
+      { name:'Skaftafell / Svartifoss', lat:64.016, lng:-16.975, type:'attr', time:'Pomeriggio', desc:'Cascata con colonne basaltiche nere. Trekking 5 km A/R ~90min.', km:'~100 km · ~1h 10min', bookingUrl:null, nights:null },
+      { name:'Diamond Beach', lat:64.044, lng:-16.178, type:'attr', time:'Sera', desc:'Blocchi di ghiaccio turchese sulla sabbia nera.', km:'~55 km · ~40min', bookingUrl:null, nights:null },
+      { name:'Jökulsárlón', lat:64.078, lng:-16.179, type:'hotel', time:'~17:00 · Notte 4', desc:'Laguna glaciale. Tappa più a est. · 💶 €710 (1 notte)', km:'~2 km · ~5min', bookingUrl:'https://www.booking.com/Share-l9ZJNM', nights:'4' }
     ],
-    segments: [
-      { km:'~5 km', time:'~5min' },
-      { km:'~85 km', time:'~1h' },
-      { km:'~100 km', time:'~1h 10min' },
-      { km:'~55 km', time:'~40min' },
+    segments:[
+      { km:'~5 km', time:'~5min' },{ km:'~85 km', time:'~1h' },
+      { km:'~100 km', time:'~1h 10min' },{ km:'~55 km', time:'~40min' },
       { km:'~2 km', time:'~5min' }
     ]
   },
   {
-    color: '#a66de8', label: '18 ago',
-    stops: [
-      { name:'Jökulsárlón', lat:64.078, lng:-16.179, type:'hotel', day:'18 ago', time:'Partenza ~10:30', desc:'Partenza verso ovest. · 💶 €710 (1 notte)', km:null, bookingUrl:'https://www.booking.com/Share-l9ZJNM', nights:null },
-      { name:'Fjallsárlón', lat:64.024, lng:-16.416, type:'attr', day:'18 ago', time:'Mattina', desc:'Laguna glaciale secondaria, meno nota e quasi deserta.' },
-      { name:'Hella', lat:63.833, lng:-20.393, type:'hotel', day:'18–19 ago', time:'Arrivo ~17:00 · 1 notte', desc:'Ritorno verso ovest. Base per Landmannalaugar. · 💶 €426 (1 notte)', km:'~320 km · ~3h 30min', bookingUrl:'https://www.booking.com/Share-dun9yy', nights:'5' }
+    color:'#a66de8', label:'18 ago', fullLabel:'18 agosto',
+    summary:'Jökulsárlón → Hella. Mattina alla laguna, poi lungo ritorno verso ovest.',
+    totalKm:'~320 km', totalTime:'~3h 30min guida',
+    stops:[
+      { name:'Jökulsárlón', lat:64.078, lng:-16.179, type:'hotel', time:'Mattina — Boat tour', desc:'Boat tour tra i ghiacciai. Prima dei pullman turistici!', km:null, bookingUrl:'https://www.booking.com/Share-l9ZJNM', nights:null },
+      { name:'Fjallsárlón', lat:64.024, lng:-16.416, type:'attr', time:'Mattina', desc:'Laguna glaciale secondaria, quasi deserta. 10 km ovest.', km:'~10 km · ~10min', bookingUrl:null, nights:null },
+      { name:'Hella', lat:63.833, lng:-20.393, type:'hotel', time:'~17:00 · Notte 5', desc:'Base per Landmannalaugar. · 💶 €426 (1 notte)', km:'~310 km · ~3h 20min', bookingUrl:'https://www.booking.com/Share-dun9yy', nights:'5' }
     ],
-    segments: [
-      { km:'~10 km', time:'~10min' },
-      { km:'~310 km', time:'~3h 20min' }
+    segments:[
+      { km:'~10 km', time:'~10min' },{ km:'~310 km', time:'~3h 20min' }
     ]
   },
   {
-    color: '#4ac4c4', label: '19 ago',
-    stops: [
-      { name:'Hella', lat:63.833, lng:-20.393, type:'hotel', day:'19 ago', time:'Partenza mattina', desc:'Partenza verso Reykjavik. · 💶 €426 (1 notte)', km:null, bookingUrl:'https://www.booking.com/Share-dun9yy', nights:null },
-      { name:'Kerið', lat:64.041, lng:-20.885, type:'attr', day:'19 ago', time:'Mattina', desc:'Cratere vulcanico con lago verde smeraldo. ~30 min di visita.' },
-      { name:'Þingvellir', lat:64.255, lng:-21.129, type:'attr', day:'19 ago', time:'Mattina', desc:'Sito UNESCO. Faglia tra placca nordamericana ed eurasiatica.' },
-      { name:'Reykjavík', lat:64.135, lng:-21.895, type:'hotel', day:'19–20 ago', time:'Arrivo ~14:00 · 1 notte', desc:'Serata libera: Hallgrímskirkja, Harpa, Laugavegur. · 💶 €266 (1 notte)', km:'~100 km · ~1h 30min', bookingUrl:'https://www.booking.com/Share-PMTRzIq', nights:'6' },
-      { name:'Hallgrímskirkja', lat:64.142, lng:-21.927, type:'attr', day:'19–20 ago', time:'Sera', desc:'La chiesa iconica di Reykjavik.' },
-      { name:'Keflavík — Partenza', lat:63.983, lng:-22.620, type:'airport', day:'20 ago', time:'Volo mattina', desc:'Restituzione auto e partenza. Uscire da Reykjavik entro le 12:30.', km:'~50 km · ~45min', bookingUrl:null, nights:null }
+    color:'#4ac4c4', label:'19 ago', fullLabel:'19 agosto',
+    summary:'Hella → Reykjavík via Kerið e Þingvellir. Serata libera in città.',
+    totalKm:'~100 km', totalTime:'~1h 30min guida',
+    stops:[
+      { name:'Hella', lat:63.833, lng:-20.393, type:'hotel', time:'Partenza mattina', desc:'Partenza verso Reykjavik.', km:null, bookingUrl:'https://www.booking.com/Share-dun9yy', nights:null },
+      { name:'Kerið', lat:64.041, lng:-20.885, type:'attr', time:'Mattina', desc:'Cratere vulcanico con lago verde smeraldo. ~30 min.', km:'~25 km · ~25min', bookingUrl:null, nights:null },
+      { name:'Þingvellir', lat:64.255, lng:-21.129, type:'attr', time:'Mattina', desc:'Sito UNESCO. Faglia tra placca nordamericana ed eurasiatica.', km:'~35 km · ~30min', bookingUrl:null, nights:null },
+      { name:'Reykjavík', lat:64.135, lng:-21.895, type:'hotel', time:'~14:00 · Notte 6', desc:'Hallgrímskirkja, Harpa, Laugavegur. · 💶 €266 (1 notte)', km:'~45 km · ~40min', bookingUrl:'https://www.booking.com/Share-PMTRzIq', nights:'6' },
+      { name:'Hallgrímskirkja', lat:64.142, lng:-21.927, type:'attr', time:'Sera', desc:'La chiesa iconica di Reykjavik.', km:'~1 km · ~5min', bookingUrl:null, nights:null },
+      { name:'Keflavík — Partenza', lat:63.983, lng:-22.620, type:'airport', time:'20 ago — Volo mattina', desc:'Uscire da RVK entro le 12:30.', km:'~50 km · ~45min', bookingUrl:null, nights:null }
     ],
-    segments: [
-      { km:'~25 km', time:'~25min' },
-      { km:'~35 km', time:'~30min' },
-      { km:'~45 km', time:'~40min' },
-      { km:'~1 km', time:'~5min' },
+    segments:[
+      { km:'~25 km', time:'~25min' },{ km:'~35 km', time:'~30min' },
+      { km:'~45 km', time:'~40min' },{ km:'~1 km', time:'~5min' },
       { km:'~50 km', time:'~45min' }
     ]
   }
 ];
 
 var segInfo = document.getElementById('seg-info');
+var markerMap = {}; // key: name+lat → marker
 
+// Draw routes
 days.forEach(function(day) {
   var coords = day.stops.map(function(s){ return [s.lat, s.lng]; });
-  L.polyline(coords, { color: day.color, weight: 3, opacity: 0.85 }).addTo(map);
+  L.polyline(coords, { color:day.color, weight:3, opacity:0.85 }).addTo(map);
 
-  for (var i = 0; i < day.stops.length - 1; i++) {
+  for (var i = 0; i < day.stops.length-1; i++) {
     (function(i) {
-      var s1 = day.stops[i], s2 = day.stops[i+1];
-      var seg = day.segments[i];
-      var midLat = (s1.lat + s2.lat) / 2;
-      var midLng = (s1.lng + s2.lng) / 2;
-
-      var hit = L.polyline([[s1.lat,s1.lng],[s2.lat,s2.lng]], { color:'transparent', weight:18, opacity:0 }).addTo(map);
-      hit.on('click', function() {
-        segInfo.innerHTML = '<strong>'+s1.name+'</strong> → <strong>'+s2.name+'</strong> &nbsp;·&nbsp; <strong style="color:'+day.color+'">'+seg.km+'</strong> · '+seg.time;
+      var s1=day.stops[i], s2=day.stops[i+1], seg=day.segments[i];
+      var midLat=(s1.lat+s2.lat)/2, midLng=(s1.lng+s2.lng)/2;
+      var hit=L.polyline([[s1.lat,s1.lng],[s2.lat,s2.lng]],{color:'transparent',weight:18,opacity:0}).addTo(map);
+      hit.on('click',function(){
+        segInfo.innerHTML='<strong>'+s1.name+'</strong> → <strong>'+s2.name+'</strong> &nbsp;·&nbsp; <strong style="color:'+day.color+'">'+seg.km+'</strong> · '+seg.time;
         segInfo.classList.add('visible');
-        setTimeout(function(){ segInfo.classList.remove('visible'); }, 3000);
+        setTimeout(function(){segInfo.classList.remove('visible');},3000);
       });
-
-      L.marker([midLat, midLng], {
-        icon: L.divIcon({
-          html: '<div style="background:rgba(26,42,58,0.88);border:1px solid '+day.color+'55;border-radius:9px;padding:2px 6px;font-size:8px;color:'+day.color+';font-family:-apple-system,sans-serif;white-space:nowrap;">'+seg.km+'</div>',
-          iconAnchor: [28, 8], className: ''
+      L.marker([midLat,midLng],{
+        icon:L.divIcon({
+          html:'<div style="background:rgba(26,42,58,0.88);border:1px solid '+day.color+'55;border-radius:9px;padding:2px 6px;font-size:8px;color:'+day.color+';font-family:-apple-system,sans-serif;white-space:nowrap;">'+seg.km+'</div>',
+          iconAnchor:[28,8],className:''
         })
       }).addTo(map);
     })(i);
@@ -187,47 +248,117 @@ days.forEach(function(day) {
 });
 
 function hotelIcon(stop) {
-  var isAirport = stop.type === 'airport';
-  var color = isAirport ? '#7ab3cc' : '#c9a84c';
-  var size = 36;
-  var label = isAirport ? '&#9992;' : '&#8962;';
-  var badgeHtml = stop.nights ? '<div style="position:absolute;top:-7px;right:-8px;background:#c9a84c;color:#1a2a3a;border-radius:9px;padding:1px 5px;font-size:8px;font-weight:700;white-space:nowrap;border:1.5px solid #1a2a3a;">Notte '+stop.nights+'</div>' : '';
-  var html = '<div style="position:relative;width:'+size+'px;height:'+size+'px;"><div style="width:'+size+'px;height:'+size+'px;background:#1a2a3a;border:2.5px solid '+color+';border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:'+(isAirport?12:15)+'px;box-shadow:0 0 0 3px rgba(201,168,76,0.15),0 4px 12px rgba(0,0,0,0.5);color:'+color+';">'+label+'</div>'+badgeHtml+'</div>';
-  return L.divIcon({ html:html, iconSize:[size,size], iconAnchor:[size/2,size/2], popupAnchor:[0,-size/2-8], className:'' });
+  var isAirport=stop.type==='airport';
+  var color=isAirport?'#7ab3cc':'#c9a84c';
+  var size=36;
+  var label=isAirport?'&#9992;':'&#8962;';
+  var badge=stop.nights?'<div style="position:absolute;top:-7px;right:-8px;background:#c9a84c;color:#1a2a3a;border-radius:9px;padding:1px 5px;font-size:8px;font-weight:700;white-space:nowrap;border:1.5px solid #1a2a3a;">Notte '+stop.nights+'</div>':'';
+  var html='<div style="position:relative;width:'+size+'px;height:'+size+'px;"><div style="width:'+size+'px;height:'+size+'px;background:#1a2a3a;border:2.5px solid '+color+';border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:'+(isAirport?12:15)+'px;box-shadow:0 0 0 3px rgba(201,168,76,0.15),0 4px 12px rgba(0,0,0,0.5);color:'+color+';">'+label+'</div>'+badge+'</div>';
+  return L.divIcon({html:html,iconSize:[size,size],iconAnchor:[size/2,size/2],popupAnchor:[0,-size/2-8],className:''});
 }
-
 function attrIcon(color) {
-  var html = '<div style="width:20px;height:20px;background:#1a2a3a;border:2px solid '+color+';border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;box-shadow:0 2px 8px rgba(0,0,0,0.4);color:'+color+';">&#9733;</div>';
-  return L.divIcon({ html:html, iconSize:[20,20], iconAnchor:[10,10], popupAnchor:[0,-13], className:'' });
+  var html='<div style="width:20px;height:20px;background:#1a2a3a;border:2px solid '+color+';border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;box-shadow:0 2px 8px rgba(0,0,0,0.4);color:'+color+';">&#9733;</div>';
+  return L.divIcon({html:html,iconSize:[20,20],iconAnchor:[10,10],popupAnchor:[0,-13],className:''});
 }
 
-var placedHotels = {};
-days.forEach(function(day) {
-  day.stops.forEach(function(stop) {
-    if (stop.type === 'hotel' || stop.type === 'airport') {
-      var key = stop.name + stop.lat;
-      if (placedHotels[key]) return;
-      placedHotels[key] = true;
-      var marker = L.marker([stop.lat, stop.lng], { icon: hotelIcon(stop), zIndexOffset: 1000 }).addTo(map);
-      var hasBooking = stop.bookingUrl !== null;
-      var btnHtml = hasBooking
-        ? '<a class="popup-btn" href="'+stop.bookingUrl+'" target="_blank">🔗 Apri su Booking.com</a>'
-        : '<div class="popup-btn no-link">Link Booking — da aggiungere</div>';
-      var kmHtml = stop.km ? '<div class="popup-row">🚗 <span>'+stop.km+'</span></div>' : '';
-      var nightHtml = stop.nights ? '<div class="popup-row">🌙 <strong>Notte '+stop.nights+'</strong></div>' : '';
-      var content = '<div class="popup-inner"><div class="popup-type hotel">'+(stop.type==='airport'?'AEROPORTO':'HOTEL / ALLOGGIO')+'</div><div class="popup-name">'+stop.name+'</div><div class="popup-meta"><div class="popup-row">📅 <strong>'+stop.day+'</strong></div><div class="popup-row">🕐 '+stop.time+'</div>'+nightHtml+kmHtml+'</div><div class="popup-divider"></div><div class="popup-desc">'+stop.desc+'</div>'+btnHtml+'</div>';
-      marker.bindPopup(content, { maxWidth:280 });
+var placedHotels={};
+days.forEach(function(day){
+  day.stops.forEach(function(stop){
+    var key=stop.name+stop.lat;
+    var marker;
+    if(stop.type==='hotel'||stop.type==='airport'){
+      if(placedHotels[key]) return;
+      placedHotels[key]=true;
+      marker=L.marker([stop.lat,stop.lng],{icon:hotelIcon(stop),zIndexOffset:1000}).addTo(map);
+      var hasBooking=stop.bookingUrl!==null;
+      var btnHtml=hasBooking?'<a class="popup-btn" href="'+stop.bookingUrl+'" target="_blank">🔗 Apri su Booking.com</a>':'<div class="popup-btn no-link">Link Booking — da aggiungere</div>';
+      var kmHtml=stop.km?'<div class="popup-row">🚗 <span>'+stop.km+'</span></div>':'';
+      var nightHtml=stop.nights?'<div class="popup-row">🌙 <strong>Notte '+stop.nights+'</strong></div>':'';
+      var content='<div class="popup-inner"><div class="popup-type hotel">'+(stop.type==='airport'?'AEROPORTO':'HOTEL')+'</div><div class="popup-name">'+stop.name+'</div><div class="popup-meta"><div class="popup-row">📅 <strong>'+stop.time+'</strong></div>'+nightHtml+kmHtml+'</div><div class="popup-divider"></div><div class="popup-desc">'+stop.desc+'</div>'+btnHtml+'</div>';
+      marker.bindPopup(content,{maxWidth:260});
     } else {
-      var marker = L.marker([stop.lat, stop.lng], { icon: attrIcon(day.color) }).addTo(map);
-      var content = '<div class="popup-inner"><div class="popup-type attraction">ATTRAZIONE</div><div class="popup-name">'+stop.name+'</div><div class="popup-meta"><div class="popup-row">📅 <strong>'+stop.day+'</strong></div><div class="popup-row">🕐 '+stop.time+'</div></div><div class="popup-divider"></div><div class="popup-desc">'+stop.desc+'</div></div>';
-      marker.bindPopup(content, { maxWidth:280 });
+      marker=L.marker([stop.lat,stop.lng],{icon:attrIcon(day.color)}).addTo(map);
+      var content='<div class="popup-inner"><div class="popup-type attraction">ATTRAZIONE</div><div class="popup-name">'+stop.name+'</div><div class="popup-meta"><div class="popup-row">🕐 '+stop.time+'</div>'+(stop.km?'<div class="popup-row">🚗 '+stop.km+'</div>':'')+'</div><div class="popup-divider"></div><div class="popup-desc">'+stop.desc+'</div></div>';
+      marker.bindPopup(content,{maxWidth:260});
     }
+    if(!markerMap[key]) markerMap[key]=marker;
   });
 });
 
-var allCoords = [];
+// Sidebar
+var activeDay=0;
+var sidebarVisible=true;
+
+function toggleSidebar(){
+  sidebarVisible=!sidebarVisible;
+  document.getElementById('sidebar').classList.toggle('hidden',!sidebarVisible);
+}
+
+function renderDayTabs(){
+  var tabs=document.getElementById('dayTabs');
+  tabs.innerHTML='';
+  days.forEach(function(day,i){
+    var btn=document.createElement('div');
+    btn.className='day-tab'+(i===activeDay?' active':'');
+    btn.textContent=day.label;
+    btn.style.borderColor=i===activeDay?day.color:'transparent';
+    if(i===activeDay){ btn.style.background=day.color; btn.style.color='#1a2a3a'; }
+    btn.onclick=function(){ activeDay=i; renderDayTabs(); renderStopList(); };
+    tabs.appendChild(btn);
+  });
+}
+
+function renderStopList(){
+  var day=days[activeDay];
+  var list=document.getElementById('stopList');
+  list.innerHTML='';
+
+  day.stops.forEach(function(stop,i){
+    if(i>0){
+      var seg=day.segments[i-1];
+      if(seg){
+        var conn=document.createElement('div');
+        conn.style.cssText='display:flex;align-items:center;gap:6px;padding:0 10px;margin-bottom:4px;';
+        conn.innerHTML='<div style="width:1px;height:14px;background:rgba(255,255,255,0.08);margin-left:3px;flex-shrink:0;"></div><div style="font-size:9px;color:rgba(201,168,76,0.5);">'+seg.km+' · '+seg.time+'</div>';
+        list.appendChild(conn);
+      }
+    }
+
+    var item=document.createElement('div');
+    item.className='stop-item';
+
+    var typeLabel=stop.type==='hotel'?'hotel':stop.type==='airport'?'airport':'attr';
+    var typeName=stop.type==='hotel'?'Hotel':stop.type==='airport'?'Aeroporto':'Attrazione';
+    var dotColor=stop.type==='hotel'?'#c9a84c':stop.type==='airport'?'#7ab3cc':day.color;
+
+    item.innerHTML='<div class="stop-item-header">'
+      +'<div class="stop-dot" style="background:'+dotColor+'"></div>'
+      +'<div class="stop-name">'+stop.name+'</div>'
+      +'<span class="stop-type-badge '+typeLabel+'">'+typeName+'</span>'
+      +'</div>'
+      +'<div class="stop-time">🕐 '+stop.time+'</div>'
+      +'<div class="stop-desc">'+stop.desc+'</div>';
+
+    item.onclick=function(){
+      var key=stop.name+stop.lat;
+      var marker=markerMap[key];
+      map.setView([stop.lat,stop.lng],11,{animate:true});
+      if(marker) setTimeout(function(){ marker.openPopup(); },400);
+    };
+    list.appendChild(item);
+  });
+
+  // Summary
+  var summary=document.getElementById('daySummary');
+  summary.innerHTML='<div class="day-summary-text"><strong>'+day.fullLabel+'</strong><br>'+day.summary+'<br><span style="color:var(--gold)">'+day.totalKm+' · '+day.totalTime+'</span></div>';
+}
+
+renderDayTabs();
+renderStopList();
+
+var allCoords=[];
 days.forEach(function(d){ d.stops.forEach(function(s){ allCoords.push([s.lat,s.lng]); }); });
-map.fitBounds(L.polyline(allCoords).getBounds(), { padding:[40,40] });
+map.fitBounds(L.polyline(allCoords).getBounds(),{padding:[40,40]});
 </script>
 </body>
 </html>
